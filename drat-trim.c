@@ -57,7 +57,7 @@ struct solver { FILE *inputFile, *proofFile, *lratFile, *traceFile, *activeFile;
       *processed, *assigned, count, *used, *max, COREcount, RATmode, RATcount, nActive, *lratTable,
       nLemmas, maxRAT, *RATset, *preRAT, maxDependencies, nDependencies, bar, backforce, reduce,
       *dependencies, maxVar, maxSize, mode, verb, unitSize, prep, *current, nRemoved, warning,
-      delProof, *setMap, *setTruth;
+      delProof, *setMap, *setTruth, *skip;
     char *coreStr, *lemmaStr;
     struct timeval start_time;
     long mem_used, time, nClauses, nStep, nOpt, nAlloc, *unitStack, *reason, lemmas, nResolve,
@@ -307,6 +307,7 @@ void printProof (struct solver *S) {
     if (S->nOpt > S->nAlloc) {
       S->nAlloc = S->nOpt;
       S->proof = (long*) realloc (S->proof, sizeof (long) * S->nAlloc);
+      S->skip = (int*) realloc (S->skip, sizeof (int) * S->nAlloc);
       if (S->proof == NULL) { printf("c MEMOUT: reallocation of proof list failed\n"); exit (0); } }
     S->nStep   = 0;
     S->nLemmas = 0;
@@ -966,7 +967,7 @@ int verify (struct solver *S, int begin, int end) {
 
     if (d && S->mode == FORWARD_SAT) {
       if (size == -1) propagateUnits (S, 0);  // necessary?
-      if (redundancyCheck (S, lemmas, size, 1) == FAILED)  {
+      if (!S->skip[step] && redundancyCheck (S, lemmas, size, 1) == FAILED)  {
         printf ("c failed at proof line %i (modulo deletion errors)\n", step + 1);
         return SAT; }
       continue; }
@@ -974,7 +975,8 @@ int verify (struct solver *S, int begin, int end) {
     if (d == 0 && S->mode == FORWARD_UNSAT) {
       if (step > end) {
         if (size < 0) continue; // Fix of bus error: 10
-        if (redundancyCheck (S, lemmas, size, 1) == FAILED) {
+        if (size == 0 && S->skip[step]) goto start_verification;
+        if (!S->skip[step] && redundancyCheck (S, lemmas, size, 1) == FAILED) {
           printf ("c failed at proof line %i (modulo deletion errors)\n", step + 1);
           return SAT; }
 
@@ -1239,6 +1241,7 @@ int parse (struct solver* S) {
   S->nAlloc  = BIGINIT;
   S->formula = (long *) malloc (sizeof (long) * S->nClauses);
   S->proof   = (long *) malloc (sizeof (long) * S->nAlloc);
+  S->skip    = (int *) malloc (sizeof (int) * S->nAlloc);
   long **hashTable = (long**) malloc (sizeof (long*) * BIGINIT);
   int   *hashUsed  = (int * ) malloc (sizeof (int  ) * BIGINIT);
   int   *hashMax   = (int * ) malloc (sizeof (int  ) * BIGINIT);
@@ -1268,9 +1271,12 @@ int parse (struct solver* S) {
             if (S->warning == HARDWARNING) exit (HARDWARNING); }
           S->nReads++; }
         else {
+          tmp = fscanf (S->proofFile, " c  %i ", &lit);
+          if(tmp > 0) {S->skip[S->nStep] = 1;} // Skip verifying this clause
+          else {
           tmp = fscanf (S->proofFile, " d  %i ", &lit);
           if (tmp == EOF) break;
-          del = tmp > 0; } } }
+          del = tmp > 0; } } } }
 
     if (!lit) {
       if (!fileSwitchFlag) tmp = fscanf (S->inputFile, " %i ", &lit);  // Read a literal.
@@ -1341,6 +1347,7 @@ int parse (struct solver* S) {
             active--;
             if (S->nStep == S->nAlloc) { S->nAlloc = (S->nAlloc * 3) >> 1;
               S->proof = (long*) realloc (S->proof, sizeof (long) * S->nAlloc);
+              S->skip = (int*) realloc (S->skip, sizeof (int) * S->nAlloc);
 //              printf ("c proof allocation increased to %li\n", S->nAlloc);
               if (S->proof == NULL) { printf("c MEMOUT: reallocation of proof list failed\n"); exit (0); } }
             S->proof[S->nStep++] = (match << INFOBITS) + 1; }
@@ -1371,6 +1378,7 @@ int parse (struct solver* S) {
       else {
         if (S->nStep == S->nAlloc) { S->nAlloc = (S->nAlloc * 3) >> 1;
           S->proof = (long*) realloc (S->proof, sizeof (long) * S->nAlloc);
+          S->skip = (int*) realloc (S->skip, sizeof (int) * S->nAlloc);
 //        printf ("c proof allocation increased to %li\n", S->nAlloc);
         if (S->proof == NULL) { printf("c MEMOUT: reallocation of proof list failed\n"); exit (0); } }
         S->proof[S->nStep++] = (((long) (clause - S->DB)) << INFOBITS); }
@@ -1396,6 +1404,7 @@ int parse (struct solver* S) {
         printClause (clause);
         if (S->nStep == S->nAlloc) { S->nAlloc = (S->nAlloc * 3) >> 1;
           S->proof = (long*) realloc (S->proof, sizeof (long) * S->nAlloc);
+          S->skip = (int*) realloc (S->skip, sizeof (int) * S->nAlloc);
 //          printf ("c proof allocation increased to %li\n", S->nAlloc);
           if (S->proof == NULL) { printf("c MEMOUT: reallocation of proof list failed\n"); exit (0); } }
         S->proof[S->nStep++] = (((int) (clause - S->DB)) << INFOBITS) + 1; } } }
@@ -1463,6 +1472,7 @@ void freeMemory (struct solver *S) {
   free (S->reason);
   free (S->proof);
   free (S->formula);
+  free (S->skip);
   for (i = 1; i <= S->maxVar; ++i) { free (S->wlist[i]); free (S->wlist[-i]); }
   free (S->used   - S->maxVar);
   free (S->max    - S->maxVar);
