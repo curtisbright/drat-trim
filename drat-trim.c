@@ -57,7 +57,7 @@ struct solver { FILE *inputFile, *proofFile, *lratFile, *traceFile, *activeFile;
       *processed, *assigned, count, *used, *max, COREcount, RATmode, RATcount, nActive, *lratTable,
       nLemmas, maxRAT, *RATset, *preRAT, maxDependencies, nDependencies, bar, backforce, reduce,
       *dependencies, maxVar, maxSize, mode, verb, unitSize, prep, *current, nRemoved, warning,
-      delProof, *setMap, *setTruth, *skip;
+      delProof, *setMap, *setTruth, *skip, *optproofskip;
     char *coreStr, *lemmaStr;
     struct timeval start_time;
     long mem_used, time, nClauses, nStep, nOpt, nAlloc, *unitStack, *reason, lemmas, nResolve,
@@ -316,6 +316,7 @@ void printProof (struct solver *S) {
       int *lemmas = S->DB + (ad >> INFOBITS);
       if ((ad & 1) == 0) S->nLemmas++;
 //      if (lemmas[ID] & ACTIVE) lemmas[ID] ^= ACTIVE; // only useful for checking multiple times?
+      S->skip[S->nStep] = S->optproofskip[step];
       S->proof[S->nStep++] = S->optproof[step]; } }  // why not reuse ad?
 
   if (S->lemmaStr) {
@@ -327,6 +328,7 @@ void printProof (struct solver *S) {
       if (S->binOutput) {
         S->nWrites++;
         if (ad & 1) fputc ('d', lemmaFile);
+        else if (S->skip[step]) fputc ('i', lemmaFile);
         else        fputc ('a', lemmaFile); }
       else if (ad & 1) fprintf (lemmaFile, "d ");
       int reslit = lemmas[PIVOT];
@@ -1109,10 +1111,11 @@ int verify (struct solver *S, int begin, int end) {
           clause[size - 1] = last; }
         clause[PIVOT] = pivot; } }
 */
-    if (redundancyCheck (S, clause, size, 1) == FAILED) {
+    if (!S->skip[step] && redundancyCheck (S, clause, size, 1) == FAILED) {
       printf ("c failed at proof line %i (modulo deletion errors)\n", step + 1);
       return SAT; }
     checked++;
+    S->optproofskip[S->nOpt] = S->skip[step];
     S->optproof[S->nOpt++] = ad; }
 
   postprocess (S);
@@ -1264,6 +1267,7 @@ int parse (struct solver* S) {
           int res = getc_unlocked (S->proofFile);
           if      (res == EOF) break;
           else if (res ==  97) del = 0;
+          else if (res == 105) { del = 0; S->skip[S->nStep] = 1; }
           else if (res == 100) del = 1;
           else {
             if (S->warning != NOWARNING) {
@@ -1271,7 +1275,7 @@ int parse (struct solver* S) {
             if (S->warning == HARDWARNING) exit (HARDWARNING); }
           S->nReads++; }
         else {
-          tmp = fscanf (S->proofFile, " c  %i ", &lit);
+          tmp = fscanf (S->proofFile, " i  %i ", &lit);
           if(tmp > 0) {S->skip[S->nStep] = 1;} // Skip verifying this clause
           else {
           tmp = fscanf (S->proofFile, " d  %i ", &lit);
@@ -1431,6 +1435,7 @@ int parse (struct solver* S) {
   S->setTruth   = (int  *) malloc ((2 * n + 1) * sizeof (int )); S->setTruth += n; // Labels for variables, non-zero means false
 
   S->optproof   = (long *) malloc (sizeof(long) * (2 * S->nLemmas + S->nClauses));
+  S->optproofskip   = (int *) malloc (sizeof(int) * (2 * S->nLemmas + S->nClauses));
 
   S->maxRAT = INIT;
   S->RATset = (int*) malloc (sizeof (int) * S->maxRAT);
