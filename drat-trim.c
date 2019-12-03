@@ -1267,7 +1267,7 @@ int parse (struct solver* S) {
           int res = getc_unlocked (S->proofFile);
           if      (res == EOF) break;
           else if (res ==  97) del = 0;
-          else if (res == 105) { del = 0; S->skip[S->nStep] = 1; }
+          else if (res == 116) { del = 0; S->skip[S->nStep] = 1; }
           else if (res == 100) del = 1;
           else {
             if (S->warning != NOWARNING) {
@@ -1275,8 +1275,8 @@ int parse (struct solver* S) {
             if (S->warning == HARDWARNING) exit (HARDWARNING); }
           S->nReads++; }
         else {
-          tmp = fscanf (S->proofFile, " i  %i ", &lit);
-          if(tmp > 0) {S->skip[S->nStep] = 1;} // Skip verifying this clause
+          tmp = fscanf (S->proofFile, " t  %i ", &lit);
+          if(tmp > 0) { del = 0; S->skip[S->nStep] = 1; } // Skip verifying this clause
           else {
           tmp = fscanf (S->proofFile, " d  %i ", &lit);
           if (tmp == EOF) break;
@@ -1589,7 +1589,7 @@ int main (int argc, char** argv) {
        if (S.binMode == 0) {
           c = getc_unlocked (S.proofFile); // check the first character in the file
           if (c == EOF) { S.binMode = 1; continue; }
-          if ((c != 13) && (c != 32) && (c != 45) && ((c < 48) || (c > 57)) && (c != 99) && (c != 100)) {
+          if ((c != 13) && (c != 32) && (c != 45) && ((c < 48) || (c > 57)) && (c != 99) && (c != 100) && (c != 116)) {
              printf ("\rc turning on binary mode checking\n");
              S.binMode = 1; }
           if (c != 99) comment = 0; }
