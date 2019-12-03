@@ -927,6 +927,24 @@ int verify (struct solver *S, int begin, int end) {
   int step;
   int adds = 0;
   int active = S->nClauses;
+
+  const int finalconfstep = S->nStep-2;
+
+  if (S->skip[finalconfstep])
+  {  printf("c Ensuring final conflict is not from an incremental addition\n");
+     for(step = finalconfstep; ; step--)
+     { printf("c Swapping steps %d and %d\n", step, step-1);
+       const long tmp = S->proof[step];
+       S->proof[step] = S->proof[step-1];
+       S->proof[step-1] = tmp;
+       const int tmp2 = S->skip[step];
+       S->skip[step] = S->skip[step-1];
+       S->skip[step-1] = tmp2;
+       if(!(S->proof[step] & 1))
+         break;
+     }
+  }
+
   for (step = 0; step < S->nStep; step++) {
     if (step >= begin && step < end) continue;
     long ad = S->proof[step]; long d = ad & 1;
