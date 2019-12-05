@@ -940,7 +940,7 @@ int verify (struct solver *S, int begin, int end) {
        const int tmp2 = S->skip[step];
        S->skip[step] = S->skip[step-1];
        S->skip[step-1] = tmp2;
-       if(!(S->proof[step] & 1))
+       if(!(S->proof[step] & 1) && !((S->DB+(S->proof[step]>>INFOBITS))[1]==0))
          break;
      }
   }
