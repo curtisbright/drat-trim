@@ -328,9 +328,10 @@ void printProof (struct solver *S) {
       if (S->binOutput) {
         S->nWrites++;
         if (ad & 1) fputc ('d', lemmaFile);
-        else if (S->skip[step]) fputc ('i', lemmaFile);
+        else if (S->skip[step]) fputc ('t', lemmaFile);
         else        fputc ('a', lemmaFile); }
       else if (ad & 1) fprintf (lemmaFile, "d ");
+      else if (S->skip[step]) fprintf (lemmaFile, "t ");
       int reslit = lemmas[PIVOT];
       while (*lemmas) {
         int lit = *lemmas++;
@@ -931,7 +932,7 @@ int verify (struct solver *S, int begin, int end) {
   const int finalconfstep = S->nStep-2;
 
   if (S->skip[finalconfstep])
-  {  printf("c Ensuring final conflict is not from an incremental addition\n");
+  {  printf("c Ensuring final conflict is not from a trusted addition\n");
      for(step = finalconfstep; ; step--)
      { printf("c Swapping steps %d and %d\n", step, step-1);
        const long tmp = S->proof[step];
